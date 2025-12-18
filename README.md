@@ -39,8 +39,11 @@ Fill in the numbers below with your runs (recommended: report mean ± std over s
 Add your plots to `results/figs/` (or any folder you prefer) and update the paths below.
 
 Pseudo-spherical (p = 2) training curves:
+![MNIST pseudo-spherical p=2](results/figs/mnist_pseudo_spherical_p2_curves.png)
 
-![MNIST pseudo-spherical p=2: MC vs FPL vs UpperBound](results/figs/mnist_pseudo_spherical_p2_curves.png)
+
+
+
 
 Optional: overall comparison across base losses:
 
