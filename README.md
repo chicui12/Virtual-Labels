@@ -27,23 +27,23 @@ This example illustrates that MC matches direct optimization only in the cross-e
 
 | Base loss | MC (test acc) | FWD (test acc)
 |---|---:|---:
+| Pseudo-spherical (p = 2) | 0.4980 （<0.5） | 0.7603 (~0.8) |
 | Cross-entropy | 0.9299 | 0.9299 |
 | Brier | 0.9309 | 0.9225 | 
 | Tsallis (α = 0.2) | 0.8974 | 0.8991 | 
-| Pseudo-spherical (p = 2) | 0.4980 （<0.5） | 0.7603 (~0.8) |
+
 
 ### Experiment Results Figures
 
 **Figure 1.** Pseudo-Spherical (p=2): MC vs FWD
+![MNIST pseudo-spherical p=2](figs/ps_2_mc_vs_fwd.png)
 
-
-![MNIST pseudo-spherical p=2](Experiment%20Results/minst/mc.ps2.png)
-
-![FWD pseudo-spherical p=2](Experiment%20Results/minst/fwd.ps2.png)
 
 **Figure 2.** Cross Entropy: MC vs FWD
+![FWD CE](figs/cross_entropy_mc_vs_fwd.png)
 
-Cross Entropy: MC
-![MC CE](Experiment%20Results/minst/mc.ce.png)
-Cross Entropy: FWD
-![FWD CE](Experiment%20Results/minst/fwd.ce.png)
+**Figure 3.** Brier: MC vs FWD
+![FWD CE](figs/brier_mc_vs_fwd.png)
+
+**Figure 4.** Tsallis0.2: MC vs FWD
+![FWD CE](figs/tsallis_0.2_mc_vs_fwd.png)
