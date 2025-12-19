@@ -22,7 +22,7 @@ Pseudo-spherical loss with p = 2 provides a clear and typical case where the met
 
 This example illustrates that MC matches direct optimization only in the cross-entropy case, while for other proper losses MC can converge to a biased fixed point.
 
-### EXperiment Results table（More experimental figures are available in the `Experiment Results` directory on GitHub.）
+### EXperiment Results table（More experimental figures are available in the figs and Experiment Results directory on GitHub.）
 
 
 | Base loss | MC (test acc) | FWD (test acc)
@@ -36,9 +36,9 @@ This example illustrates that MC matches direct optimization only in the cross-e
 
 **Figure 1.** Pseudo-Spherical (p=2): MC vs FWD
 
-Pseudo-Spherical (p=2): MC
-![MNIST MC pseudo-spherical p=2](Experiment%20Results/minst/mc.ps2.png)
-Pseudo-Spherical (p=2): FWD
+
+![MNIST pseudo-spherical p=2](Experiment%20Results/minst/mc.ps2.png)
+
 ![FWD pseudo-spherical p=2](Experiment%20Results/minst/fwd.ps2.png)
 
 **Figure 2.** Cross Entropy: MC vs FWD
