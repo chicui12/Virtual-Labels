@@ -195,3 +195,10 @@ cython_debug/
 
 Datasets
 results
+
+# Added by JCS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+Icon\r

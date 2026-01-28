@@ -25,47 +25,62 @@ torch.backends.cudnn.deterministic = False
 torch.backends.cudnn.benchmark = True
 '''
 
-def train_and_evaluate(model, trainloader, testloader, optimizer, loss_fn, num_epochs, corr_p, rep = None, sound=10, loss_type = None, clothing = False):
+def train_and_evaluate(
+        model, trainloader, testloader, optimizer, loss_fn, num_epochs, corr_p,
+        rep=None, sound=10, loss_type=None, clothing=False, phi=0.8):
+
     seed = 42  # You can choose any integer seed
     torch.manual_seed(seed)
     np.random.seed(seed)
     random.seed(seed)
     initial_lr = optimizer.param_groups[0]['lr']
 
+    print(trainloader.dataset.tensors[3])
+
     # Initialize a list to store epoch data
     results = []
 
-    #Only when debbuging
-    #torch.autograd.set_detect_anomaly(True)
+    # Only when debbuging
+    # torch.autograd.set_detect_anomaly(True)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
     for epoch in range(num_epochs):
+        print(f"Starting epoch {epoch+1}/{num_epochs}")
+
         start_time = time.time()
         model.train()
 
         running_loss = 0.0
         correct_train = 0
 
-        for inputs, vl, targets in trainloader:
+        for inputs, wl, vl, cl, targets, indices  in trainloader:
 
-        #    if i == 0:
-        #       for name, param in model.named_parameters():
-        #          print(name, param)
+            #    if i == 0:
+            #       for name, param in model.named_parameters():
+            #          print(name, param)
 
             #if loss_type == 'Supervised':
             #    train_targets = torch.max(targets, dim=1)[1]
-            inputs, vl, targets = inputs.to(device), vl.to(device), targets.to(device)
-            
+            inputs = inputs.to(device)
+            wl, targets = wl.to(device), targets.to(device)
 
+            if loss_type == 'PiCO':
+                vl, cl = vl.to(device), cl.to(device)
+                indices = indices.to(device)
+ 
             optimizer.zero_grad()
             outputs = model(inputs)
             #if loss_type == 'Supervised':
             #    # For cross-entropy loss, targets should be class indices
             #    loss = loss_fn(outputs, train_targets)
             #else:
-            loss = loss_fn.forward(outputs, vl) 
+
+            if loss_type == 'PiCO':
+                loss = loss_fn.forward(outputs, wl, cl)
+            else:
+                loss = loss_fn.forward(outputs, wl) 
             loss.backward()
             optimizer.step()
 
@@ -74,6 +89,15 @@ def train_and_evaluate(model, trainloader, testloader, optimizer, loss_fn, num_e
             _, preds = torch.max(outputs, dim=1)
             _, true = torch.max(targets, dim=1)
             correct_train += torch.sum(preds == true)
+
+            # For PiCO loss, update virtual labels after each epoch
+            # PiCO needs to modify the weighs in the dataset
+            # The weights are stored in trainloader.dataset.tensors[3]
+            # This is not much robust, but works for now        
+            if loss_type == 'PiCO':
+                with torch.no_grad():
+                    trainloader.dataset.tensors[3][indices] = phi * cl
+                    trainloader.dataset.tensors[3][indices, preds] += (1 - phi)
 
         train_acc = correct_train.double() / len(trainloader.dataset)
         train_loss = running_loss / len(trainloader.dataset)
@@ -97,7 +121,7 @@ def train_and_evaluate(model, trainloader, testloader, optimizer, loss_fn, num_e
         detached_test_loss = 0.0
         with torch.no_grad():
             det_loss_fn = torch.nn.CrossEntropyLoss()  
-            for inputs, _, targets in trainloader:
+            for inputs, wl, vl, cl, targets, indices in trainloader:
                 inputs, targets = inputs.to(device), targets.to(device)
                 outputs = model(inputs)
                 detached_train_loss += det_loss_fn(outputs, targets).item()
