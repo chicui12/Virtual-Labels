@@ -1,3 +1,4 @@
+from zmq import device
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -47,7 +48,7 @@ def train_and_evaluate(
     model.to(device)
 
     for epoch in range(num_epochs):
-        print(f"Starting epoch {epoch+1}/{num_epochs}")
+        print(f"Starting epoch {epoch+1}/{num_epochs}", flush=True, end='\r')
 
         start_time = time.time()
         model.train()
@@ -72,6 +73,7 @@ def train_and_evaluate(
  
             optimizer.zero_grad()
             outputs = model(inputs)
+
             #if loss_type == 'Supervised':
             #    # For cross-entropy loss, targets should be class indices
             #    loss = loss_fn(outputs, train_targets)
@@ -96,7 +98,13 @@ def train_and_evaluate(
             # This is not much robust, but works for now        
             if loss_type == 'PiCO':
                 with torch.no_grad():
-                    trainloader.dataset.tensors[3][indices] = phi * cl
+                    # 1. Best class prediction per file
+                    max_idx = (outputs * vl).argmax(dim=1)
+
+                    # 2. Crear el tensor de salida
+                    best_class = torch.zeros_like(outputs)
+                    best_class[torch.arange(outputs.size(0)), max_idx] = 1
+                    trainloader.dataset.tensors[3][indices] = phi * best_class
                     trainloader.dataset.tensors[3][indices, preds] += (1 - phi)
 
         train_acc = correct_train.double() / len(trainloader.dataset)

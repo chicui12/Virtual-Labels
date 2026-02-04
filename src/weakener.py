@@ -28,7 +28,9 @@ class Weakener(object):
         self.Y_conv = None
         self.Y_opt_conv = None
 
-    def generate_M(self, model_class = 'pll', alpha = 1, beta = None, corr_p = 0.5, corr_n = None):
+    def generate_M(self, model_class='pll', alpha=1, beta=None, corr_p=0.5,
+                   corr_n=None):
+    
         self.corr_p = corr_p
         if corr_n == None:
             self.corr_n = corr_p
@@ -478,23 +480,33 @@ class Weakener(object):
         self.M, self.Z, self.labels = self.label_matrix(M)
         self.d = self.M.shape[0]
         
-    def generate_weak(self, y, seed=None):
+    def generate_weak(self, y, seed=None, compute_w=True, compute_Y=True,
+                      compute_Y_opt=True, compute_Y_conv=True,
+                      compute_Y_opt_conv=True):
+        
         # It should work with torch
         # the version of np.random.choice changed in 1.7.0 that could raise an error-
         d, c = self.M.shape
         # [TBD] include seed
         self.z = torch.Tensor([np.random.choice(d, p=self.M[:, tl]) for tl in torch.max(y, axis=1)[1]]).to(torch.int32)
+        
+        if compute_w:
+            self.w = torch.from_numpy(self.Z[self.z.to(torch.int32)] + 0.)
+        if compute_Y:
+            self.Y = np.linalg.pinv(self.M)
+        if compute_Y_opt:
+            self.Y_opt = self.virtual_matrix(
+                p=None, optimize=True, convex=False)
+        if compute_Y_conv:
+            self.Y_conv = self.virtual_matrix(
+                p=None, optimize=False, convex=True)
+        if compute_Y_opt_conv:
+            self.Y_opt_conv = self.virtual_matrix(
+                p=None, optimize=True, convex=True)
+        return self.z # self.w
 
-        self.w = torch.from_numpy(self.Z[self.z.to(torch.int32)] + 0.)
-        self.Y = np.linalg.pinv(self.M)
-        self.Y_opt = self.virtual_matrix(p=None, optimize = True, convex=False)
-        self.Y_conv = self.virtual_matrix(p=None, optimize = False, convex=True)
-        self.Y_opt_conv = self.virtual_matrix(p=None, optimize = True, convex=True)
 
-        return self.z# self.w
-
-
-    def virtual_matrix(self, p=None, optimize = True, convex=True):
+    def virtual_matrix(self, p=None, optimize=True, convex=True):
         d, c = self.M.shape
         I_c = np.eye(c)
 
@@ -511,13 +523,16 @@ class Weakener(object):
         if c==d:
             Y = np.linalg.pinv(self.M)
         elif convex:
-            prob = cvxpy.Problem(cvxpy.Minimize(
-                cvxpy.norm(cvxpy.hstack([cvxpy.norm(hat_Y[:, i])**2 * p[i] for i in range(d)]),1)
+            prob = cvxpy.Problem(
+                cvxpy.Minimize(
+                    cvxpy.norm(
+                        cvxpy.hstack([cvxpy.norm(hat_Y[:, i])**2 * p[i]
+                                      for i in range(d)]),1)
             ),
                 [hat_Y @ self.M == I_c, hat_Y.T @ c_1 == d_1]
             )
-            prob.solve(solver=cvxpy.CLARABEL) #For cifar 100 it is not working
-            #problem.solve(solver=cvxpy.ECOS)
+            prob.solve(solver=cvxpy.CLARABEL) # For cifar 100 it is not working
+            # problem.solve(solver=cvxpy.ECOS)
             Y = hat_Y.value
         else:
             prob = cvxpy.Problem(cvxpy.Minimize(
@@ -526,12 +541,10 @@ class Weakener(object):
                 [hat_Y @ self.M == I_c]
             )
             prob.solve(solver=cvxpy.CLARABEL)
-            #problem.solve(solver=cvxpy.ECOS)
+            # problem.solve(solver=cvxpy.ECOS)
             Y = hat_Y.value
         
         return Y
-
-
 
     def virtual_labels(self, y = None, p=None, optimize = True, convex=True):
         '''
@@ -547,6 +560,7 @@ class Weakener(object):
             self.virtual_matrix(p, optimize, convex)
         self.v = self.Y.T[self.z]
         return
+    
     def generate_wl_priors(self, loss = 'CELoss'):
 
         #z_count = Counter(z)

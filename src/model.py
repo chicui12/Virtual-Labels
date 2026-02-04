@@ -4,14 +4,13 @@ import torch.nn.functional as F
 import torchvision.models as models
 
 class MLP(nn.Module):
-    def __init__(self, input_size, hidden_sizes, output_size, dropout_p=0.0, bn = False, activation='relu'):
+    def __init__(self, input_size, hidden_sizes, output_size, dropout_p=0.0,
+                 bn=False, activation='relu'):
 
-        print("Initializing MLP model...")
+        print(f"Initializing MLP model with {input_size} inputs, "
+              f"{hidden_sizes} hidden sizes, and {output_size} outputs.")
+
         super().__init__()
-
-        print(input_size)
-        print(hidden_sizes)
-        print(output_size)
 
         # Create a list of layer sizes
         layer_sizes = [input_size] + hidden_sizes + [output_size]

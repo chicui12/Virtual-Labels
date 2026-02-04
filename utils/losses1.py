@@ -60,8 +60,6 @@ def scoring_matrix(p: torch.Tensor, loss_code: str, eps: float = 1e-8) -> torch.
         raise ValueError(f"Unknown proper loss code: {loss_code}")
     
 
-
-
 # ---------- EM-style marginal-chain objective ----------
 class MarginalChainProperLoss(nn.Module):
     """
@@ -131,8 +129,6 @@ class MarginalChainProperLoss(nn.Module):
             return loss_per_sample
 
 
-
-
 # ---------- Forward (plug-in) marginal-chain objective ----------
 class ForwardProperLoss(nn.Module):
     def __init__(self, F_mat, loss_code: str, reduction: str = "mean", eps: float = 1e-28):
@@ -167,8 +163,6 @@ class ForwardProperLoss(nn.Module):
             return loss_per_sample
 
 
-
-
 class PiCOLoss(nn.Module):
     """
     """
@@ -185,13 +179,13 @@ class PiCOLoss(nn.Module):
     def forward(self, logits: torch.Tensor, z: torch.Tensor,
                 Q: torch.Tensor) -> torch.Tensor:
         """
-        Commputes the forward loss for pseudo-targets T.
+        Commputes the forward loss for pseudo-targets Q.
         
         Parameters
         ----------
         logits : torch.Tensor
             The model outputs (before softmax)
-        T : torch.Tensor
+        Q : torch.Tensor
             The pseudo-targets.
         """
 
@@ -201,9 +195,6 @@ class PiCOLoss(nn.Module):
 
         # ---------- E-step: 责任 Q（数值上 posterior，反向里当常数） ----------
         Q = Q.detach()                     # 非常重要：Q 不反传梯度
-
-        print("Shape of Q:", Q.shape)
-        print("Shape of logp:", logp.shape)
 
         if self.loss_code == "cross_entropy":
             # ---------- 原始 MC 的部分：L_MC = E_Q[-log p] ----------
@@ -225,8 +216,6 @@ class PiCOLoss(nn.Module):
             return loss_per_sample
 
 
-
-
 # ---------- Forward (plug-in) marginal-chain objective ----------
 class ForwardProperLoss(nn.Module):
     def __init__(self, F_mat, loss_code: str, reduction: str = "mean", eps: float = 1e-28):
@@ -259,8 +248,6 @@ class ForwardProperLoss(nn.Module):
             return loss_per_sample.sum()
         else:
             return loss_per_sample
-
-
 
 
 class UpperBoundWeakProperLoss(nn.Module):
