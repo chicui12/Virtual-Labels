@@ -241,7 +241,28 @@ class PiCOLoss(nn.Module):
 
 # ---------- Forward (plug-in) marginal-chain objective ----------
 class ForwardProperLoss(nn.Module):
-    def __init__(self, F_mat, loss_code: str, reduction: str = "mean", eps: float = 1e-28):
+    def __init__(self, F_mat, loss_code: str, reduction: str = "mean",
+                 eps: float = 1e-28):
+        """
+        Contains methods for training a model with a forward loss
+        phi(z, p) = - z'·phi(F·p) , where phi is the proper loss specified by
+        loss_code, z is the weak label and p is the model probabilistic
+        prediction, and F is the forward matrix that maps p to the
+        pseudo-target r = F p.
+
+        Parameters
+        F_mat : array-like
+            The forward matrix F that maps model predictions to pseudo-targets.
+        loss_code : str
+            The code specifying which proper loss to use (e.g., "cross_entropy",
+            "brier", "spherical", etc.).
+        reduction : str, optional
+            Specifies the reduction to apply to the output: "mean", "sum", or
+            "none" (default is "mean").
+        eps : float, optional
+            A small value to avoid numerical issues (default is 1e-28).
+        """
+
         super().__init__()
         self.logsoftmax = nn.LogSoftmax(dim=1)
         self.F = torch.as_tensor(F_mat, dtype=torch.float32)
@@ -250,6 +271,19 @@ class ForwardProperLoss(nn.Module):
         self.eps = eps
 
     def forward(self, logits: torch.Tensor, z: torch.Tensor) -> torch.Tensor:
+        """
+        Computes the forward loss phi(z, p) = - z'·phi(F·p) , where phi is
+        the proper loss specified by loss_code, z is the weak label, p is the
+        model's predicted distribution, and F is the forward matrix that maps p
+        to the pseudo-target r = F p.
+
+        Parameters
+        logits : torch.Tensor
+            The model outputs (before softmax), shape (B, C).
+        z : torch.Tensor
+            The weak labels, shape (B,). Each entry is an integer class index.
+        """
+
         z = z.long()
         logp = self.logsoftmax(logits)
         p = logp.exp()                     # (B, C)
@@ -257,9 +291,13 @@ class ForwardProperLoss(nn.Module):
         F = self.F.to(logits.device)       # (C, C)
         r = torch.matmul(F, p.T).T         # (B, C)
 
+        # Cross entropy is treated separately to avoid log(0) issues
         if self.loss_code == "cross_entropy":
+            # Take the r corresponding to the weak label z for each sample
             rz = r.gather(1, z.view(-1, 1)).squeeze(1)
+            # Avoid log(0) by clamping to a minimum value
             rz = rz.clamp_min(self.eps)
+            # Now compute the loss
             loss_per_sample = -torch.log(rz)
         else:
             S = scoring_matrix(r, self.loss_code)
