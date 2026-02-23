@@ -96,7 +96,8 @@ def train_and_evaluate(
             wl, targets = wl.to(device), targets.to(device)
             if pseudolabel_model == 'PiCO':
                 vl, cl = vl.to(device), cl.to(device)
-                indices = indices.to(device)
+                #indices = indices.to(device)
+
  
             optimizer.zero_grad()
             outputs = model(inputs)
@@ -112,7 +113,9 @@ def train_and_evaluate(
             optimizer.step()
 
             # Update batch's loss and accuracy
-            running_loss += loss.item()
+            #running_loss += loss.item()
+            running_loss += loss.item() * inputs.size(0)   # 按 batch 样本数加权
+
             # Convert outputs and targets to class indices for acc. calculation
             _, preds = torch.max(outputs, dim=1)
             _, true = torch.max(targets, dim=1)
@@ -133,10 +136,21 @@ def train_and_evaluate(
                     # in trainloader.dataset.tensors has been correctly stored
                     # in pseudo_label_loc. If not, the innapropriate tensor
                     # will be modified, which can lead to errors.
-                    trainloader.dataset.tensors[
+                    """ trainloader.dataset.tensors[
                         pseudo_label_loc][indices] = phi * best_class
                     trainloader.dataset.tensors[
-                        pseudo_label_loc][indices, preds] += (1 - phi)
+                        pseudo_label_loc][indices, preds] += (1 - phi) """
+                    pseudo = trainloader.dataset.tensors[pseudo_label_loc]   # 通常在 CPU
+                    dev_p = pseudo.device
+
+                    idx = indices.to(dev_p)
+                    preds_p = preds.detach().to(dev_p).long()
+                    best_class_p = best_class.detach().to(dev_p)
+
+                    pseudo[idx] = phi * best_class_p
+                    pseudo[idx, preds_p] += (1 - phi)
+
+
 
         # Compute epoch's loss and accuracy
         train_acc = correct_train.double() / len(trainloader.dataset)
@@ -164,13 +178,16 @@ def train_and_evaluate(
             for inputs, wl, vl, cl, targets, indices in trainloader:
                 inputs, targets = inputs.to(device), targets.to(device)
                 outputs = model(inputs)
-                detached_train_loss += det_loss_fn(outputs, targets).item()
+                #detached_train_loss += det_loss_fn(outputs, targets).item()
+                detached_train_loss += det_loss_fn(outputs, targets).item() * inputs.size(0)
+
             detached_train_loss /= len(trainloader.dataset)
 
             for inputs, targets in testloader:
                 inputs, targets = inputs.to(device), targets.to(device)
                 outputs = model(inputs)
-                detached_test_loss += det_loss_fn(outputs, targets).item()
+                #detached_test_loss += det_loss_fn(outputs, targets).item()
+                detached_test_loss += det_loss_fn(outputs, targets).item() * inputs.size(0)
             detached_test_loss /= len(testloader.dataset)
 
         # Get the actual learning rate from the optimizer

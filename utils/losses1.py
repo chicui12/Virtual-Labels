@@ -143,47 +143,96 @@ class IRLoss(nn.Module):
         self.reduction = reduction
         self.eps = eps
 
+    # def forward(self, logits: torch.Tensor, z: torch.Tensor) -> torch.Tensor:
+
+    #     z = z.long()
+
+    #     # 1. Compute probabilities and log-probabilities
+    #     logp = self.logsoftmax(logits)     # (B, C) = log p
+    #     p = logp.exp()                     # (B, C) = p
+
+    #     # 2. Compute Q as a constant (no gradient flow)
+    #     # Using a context manager makes the 'constant' intent very clear
+    #     with torch.no_grad():
+    #         M = self.M.to(logits.device)
+    #         Mp = p @ M.T
+            
+    #         # Add a small epsilon to avoid division by zero
+    #         Q = p / (Mp + 1e-9)
+
+    #     if self.loss_code == "cross_entropy":
+    #         # 1. Gather the probability for the true class z
+    #         pz = p.gather(1, z.view(-1, 1)).squeeze(1)
+    #         pz = pz.clamp_min(self.eps)
+            
+    #         # 2. Gather the weight Q for the true class z (matching shapes)
+    #         Qz = Q.gather(1, z.view(-1, 1)).squeeze(1)
+            
+    #         # Now both Qz and torch.log(pz) are shape (B,)
+    #         loss_per_sample = -Qz * torch.log(pz)
+            
+    #     else:
+    #         # For other scoring rules, compute the full matrix S first
+    #         # Note: I used 'p' here as 'r' was likely a typo in your snippet
+    #         S = Q * scoring_matrix(p, self.loss_code)
+            
+    #         # Then gather the specific loss for target class z
+    #         loss_per_sample = S.gather(1, z.view(-1, 1)).squeeze(1)
+
+    #     if self.reduction == "mean":
+    #         return loss_per_sample.mean()
+    #     elif self.reduction == "sum":
+    #         return loss_per_sample.sum()
+    #     return loss_per_sample
+
     def forward(self, logits: torch.Tensor, z: torch.Tensor) -> torch.Tensor:
+        z = z.long().view(-1)   # z 是 weak-label index, shape [B]
 
-        z = z.long()
+    # 1) p(y|x)
+        logp = self.logsoftmax(logits)   # [B, C]
+        p = logp.exp()                   # [B, C]
+        B, C = p.shape
 
-        # 1. Compute probabilities and log-probabilities
-        logp = self.logsoftmax(logits)     # (B, C) = log p
-        p = logp.exp()                     # (B, C) = p
-
-        # 2. Compute Q as a constant (no gradient flow)
-        # Using a context manager makes the 'constant' intent very clear
-        with torch.no_grad():
-            M = self.M.to(logits.device)
-            Mp = p @ M.T
-            
-            # Add a small epsilon to avoid division by zero
-            Q = p / (Mp + 1e-9)
-
-        if self.loss_code == "cross_entropy":
-            # 1. Gather the probability for the true class z
-            pz = p.gather(1, z.view(-1, 1)).squeeze(1)
-            pz = pz.clamp_min(self.eps)
-            
-            # 2. Gather the weight Q for the true class z (matching shapes)
-            Qz = Q.gather(1, z.view(-1, 1)).squeeze(1)
-            
-            # Now both Qz and torch.log(pz) are shape (B,)
-            loss_per_sample = -Qz * torch.log(pz)
-            
+    # 2) 统一把 M 变成 [C, K]
+        M = self.M.to(logits.device).float()
+        if M.shape[0] == C:
+            M_cz = M          # [C, K]
+        elif M.shape[1] == C:
+            M_cz = M.T        # [C, K]
         else:
-            # For other scoring rules, compute the full matrix S first
-            # Note: I used 'p' here as 'r' was likely a typo in your snippet
-            S = Q * scoring_matrix(p, self.loss_code)
-            
-            # Then gather the specific loss for target class z
-            loss_per_sample = S.gather(1, z.view(-1, 1)).squeeze(1)
+            raise ValueError(f"Incompatible shapes: p={p.shape}, M={M.shape}")
+
+    # 3) 计算 posterior 权重 Q[b,c] = p(y=c|x,z)
+        with torch.no_grad():
+        # weak_probs[b,k] = P(z=k | x)
+            weak_probs = (p @ M_cz).clamp_min(self.eps)   # [B, K]
+
+        # P(observed z_i | x_i)
+            pz_weak = weak_probs.gather(1, z.unsqueeze(1)).squeeze(1).clamp_min(self.eps)  # [B]
+
+        # M_obs[b,c] = P(z_i | y=c)
+            M_obs = M_cz[:, z].T.contiguous().clamp_min(self.eps)   # [B, C]
+
+        # posterior weights over classes
+            Q = (p * M_obs) / pz_weak.unsqueeze(1)   # [B, C]
+            Q = Q / Q.sum(dim=1, keepdim=True).clamp_min(self.eps)
+
+    # 4) 用 Q 对“按类别的loss”加权（不要再用 z 去 gather p 了）
+        if self.loss_code == "cross_entropy":
+        # classwise CE = -log p_c
+            loss_per_sample = -(Q * logp).sum(dim=1)
+
+        else:
+        # 你原来的 scoring_matrix(p, ...) 如果返回 [B,C]，这行就可以
+            S = scoring_matrix(p, self.loss_code)   # [B, C]
+            loss_per_sample = (Q * S).sum(dim=1)
 
         if self.reduction == "mean":
             return loss_per_sample.mean()
         elif self.reduction == "sum":
             return loss_per_sample.sum()
         return loss_per_sample
+
 
 
 class PiCOLoss(nn.Module):

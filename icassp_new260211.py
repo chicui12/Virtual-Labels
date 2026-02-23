@@ -31,7 +31,7 @@ w0         = 3.0           # initial guess
 
 # Range of parameter exploration
 wmin  = min(w_star, w0) - 1
-wmax  = max(w_star, w0) + 2            # = 4.0 with defaults
+wmax  = max(w_star, w0) + 1      #这个加几是控制横坐标w到哪里的，之前加2是到5，太大了，加1换到4差异明显一些    # = 4.0 with defaults
 w_vals = np.linspace(wmin, wmax, 2001) # smooth but not too heavy
 
 # ------------------------  utils  ------------------------

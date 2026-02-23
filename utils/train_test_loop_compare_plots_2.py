@@ -233,12 +233,31 @@ def plot_mc_vs_forward(
 
     title = f"Fig. 1. {_pretty_loss_name(str(base_loss_code))} — MC vs FWD"
 
-    fig = plt.figure(figsize=(10.5, 7.0), dpi=150)
-    gs = GridSpec(nrows=2, ncols=2, height_ratios=[1.25, 1.0], hspace=0.35, wspace=0.25)
+    # fig = plt.figure(figsize=(10.5, 7.0), dpi=150)
+    # gs = GridSpec(nrows=2, ncols=2, height_ratios=[1.25, 1.0], hspace=0.35, wspace=0.25)
 
-    ax_acc = fig.add_subplot(gs[0, :])
-    ax_mc = fig.add_subplot(gs[1, 0])
-    ax_fwd = fig.add_subplot(gs[1, 1])
+    # ax_acc = fig.add_subplot(gs[0, :])
+    # ax_mc = fig.add_subplot(gs[1, 0])
+    # ax_fwd = fig.add_subplot(gs[1, 1])
+
+fig = plt.figure(figsize=(11.5, 6.0), dpi=150)
+gs = GridSpec(
+    nrows=2,
+    ncols=2,
+    width_ratios=[1.2, 1.0],
+    hspace=0.30,
+    wspace=0.30,
+)
+
+# 左边：Accuracy（跨两行）
+ax_acc = fig.add_subplot(gs[:, 0])
+ax_acc.set_title("Accuracy comparison", fontsize=12, fontweight="bold")
+
+# 右边：MC / FWD train loss
+ax_mc  = fig.add_subplot(gs[0, 1])
+ax_fwd = fig.add_subplot(gs[1, 1])
+
+
 
     # -------- Accuracy (use test_acc by default; also overlay train_acc as dashed if present) --------
     for df, label, color in [
