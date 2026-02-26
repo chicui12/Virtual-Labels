@@ -188,12 +188,12 @@ class IRLoss(nn.Module):
     def forward(self, logits: torch.Tensor, z: torch.Tensor) -> torch.Tensor:
         z = z.long().view(-1)   # z 是 weak-label index, shape [B]
 
-    # 1) p(y|x)
+        # 1) p(y|x)
         logp = self.logsoftmax(logits)   # [B, C]
         p = logp.exp()                   # [B, C]
         B, C = p.shape
 
-    # 2) 统一把 M 变成 [C, K]
+        # 2) 统一把 M 变成 [C, K]
         M = self.M.to(logits.device).float()
         if M.shape[0] == C:
             M_cz = M          # [C, K]
@@ -395,6 +395,14 @@ class UpperBoundWeakProperLoss(nn.Module):
             # E_y ||f - e_y||^2 = ||f - r||^2 + const(r)，优化时用 ||f-r||^2 就行
             loss = ((f - r) ** 2).sum(dim=1)
 
+        elif self.loss_code == "spherical":
+            # scoring_matrix(f, "spherical") gives S(f,y=c) = - f_c / ||f||_2
+            # so E_{y~r} S(f,y) = - sum_c r_c * f_c / ||f||_2
+            f_safe = f.clamp_min(self.eps)
+            denom = f_safe.norm(p=2, dim=1).clamp_min(self.eps)   # (B,)
+            num = (r * f_safe).sum(dim=1)                         # (B,)
+            loss = - num / denom                                  # (B,)
+
         elif self.loss_code.startswith("ps_"):
             beta = float(self.loss_code.split("_", 1)[1])
             if beta <= 1.0:
@@ -426,3 +434,71 @@ class UpperBoundWeakProperLoss(nn.Module):
         elif self.reduction == "sum":
             return loss.sum()
         return loss
+
+
+
+
+class ForwardBackwardProperLoss(nn.Module):
+    def __init__(self, B_mat, F_mat, loss_code: str,
+                 k: float = 0.0, beta: float = 1.0, reduction: str = "mean", eps: float = 1e-12):
+        super().__init__()
+        self.logsoftmax = nn.LogSoftmax(dim=1)
+        self.softmax = nn.Softmax(dim=1)
+        self.B = torch.as_tensor(B_mat, dtype=torch.float32)
+        self.F = torch.as_tensor(F_mat, dtype=torch.float32)
+        self.loss_code = loss_code
+       
+        self.reduction = reduction
+        self.eps = eps
+
+        self.k = k
+        self.beta = beta
+
+    def forward(self, logits: torch.Tensor, z: torch.Tensor) -> torch.Tensor:
+
+        #z = z.long()
+        #z = z-1 # Im not sure of this but it works for now. This index should be from 0 to d-1 isnt it?
+        
+        z = z.long().view(-1)  # 保证是 [B]
+
+        # 兼容 1-index 的情况：如果最小值是 1，则整体减 1
+        # （这样不会把本来 0-index 的数据错误减掉）
+        if z.numel() > 0 and z.min().item() == 1:
+            z = z - 1
+
+        # 可选但强烈建议：检查 z 是否越界（d = weak label space size）
+        d = self.B.shape[0]
+        if z.min().item() < 0 or z.max().item() >= d:
+            raise ValueError(f"BWD: z out of range. Got [{z.min().item()}, {z.max().item()}], but d={d}.")
+
+        
+        
+        v = logits - logits.mean(dim=1, keepdim=True)
+        p = self.softmax(v)  
+
+        Bmat = self.B.to(logits.device)
+        Fmat = self.F.to(logits.device)  
+
+        r = torch.matmul(Fmat, p.T).T # If Fmat = I then it does nothing
+
+        if self.loss_code == "cross_entropy":
+            r_safe = r.clamp_min(self.eps)
+            S = -torch.log(r_safe)                
+        else:
+            S = scoring_matrix(r, self.loss_code)  
+
+        Bz = Bmat[z]                        
+
+        loss = (Bz * S).sum(dim=1)  
+
+        # Regularization of Yoshida's loss.
+        if self.k != 0.0:
+            reg = 0.5 * self.k * torch.sum(torch.abs(v) ** self.beta, dim=1)
+            loss = loss + reg
+
+        if self.reduction == "mean":
+            return loss.mean()
+        elif self.reduction == "sum":
+            return loss.sum()
+        else:
+            return loss

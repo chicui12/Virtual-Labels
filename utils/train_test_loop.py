@@ -4,6 +4,9 @@ import torch
 # import torch.optim as optim
 # from torch.utils.data import DataLoader, TensorDataset
 
+import os
+import signal   # For handling keyboard interrupts gracefully
+
 import pandas as pd
 import numpy as np
 import random
@@ -25,7 +28,7 @@ torch.backends.cudnn.benchmark = True
 
 def train_and_evaluate(
         model, trainloader, testloader, optimizer, loss_fn, num_epochs, 
-        pseudolabel_model=None, pseudo_label_loc=3, phi=0.8, sound=10, seed=42):
+        pseudolabel_model=None, pseudo_label_loc=3, phi=0.8, sound=10, seed=42, ckpt_path=None, resume=True):
     
     """Train the model and evaluate on the test set, returning epoch-by-epoch
     results.  
